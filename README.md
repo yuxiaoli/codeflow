@@ -154,6 +154,17 @@ Just paste: facebook/react
 Or full URL: https://github.com/facebook/react
 ```
 
+### Auto-Run URL Parameters
+You can skip the manual setup and auto-run CodeFlow via URL parameters:
+- `?repo=facebook/react` — pre-fills the repository URL. (Supports full URLs like `https://github.com/owner/repo` too).
+- `&run=1` or `&analyze=1` — automatically starts the analysis on load.
+- `&export=<format>` — automatically downloads an export report once analysis finishes.
+
+*Export formats include:* `json`, `md`, `txt`, `svg`, `pdf`, `mermaid`, `diagram`.
+
+**Example:**
+`https://codeflow-five.vercel.app/?repo=facebook/react&analyze=1&export=json`
+
 ### Private Repositories
 1. Create a [GitHub Personal Access Token](https://github.com/settings/tokens) with `repo` scope
 2. Paste it in the Token field

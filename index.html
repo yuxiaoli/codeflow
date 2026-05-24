@@ -5286,7 +5286,6 @@ function App(){
     var _ah=useState(false),showExcludeModal=_ah[0],setShowExcludeModal=_ah[1];
     var _ai=useState(''),excludePatternInput=_ai[0],setExcludePatternInput=_ai[1];
     var _aj=useState(''),excludePatternDraft=_aj[0],setExcludePatternDraft=_aj[1];
-    var _ak=useState(false),launchFolderAfterExcludeSave=_ak[0],setLaunchFolderAfterExcludeSave=_ak[1];
     var _al=useState(null),confirmDialog=_al[0],setConfirmDialog=_al[1];
     var _am=useState(window.innerWidth),viewportWidth=_am[0],setViewportWidth=_am[1];
     var _an=useState(null),mobilePanel=_an[0],setMobilePanel=_an[1];
@@ -5464,14 +5463,35 @@ function App(){
     useEffect(function(){
         var params=new URLSearchParams(window.location.search);
         var repo=params.get('repo');
-        var shouldAutoRun=params.get('run')==='1';
-        if(repo&&repo.length<200&&!repo.includes('{')&&/^[a-zA-Z0-9_.\/-]+$/.test(repo)){
-            setRepoUrl(repo);
-            if(shouldAutoRun){
-                setTimeout(function(){var btn=document.getElementById('analyze-btn');if(btn)btn.click();},500);
+        var shouldAutoRun=params.get('run')==='1' || params.get('analyze')==='1';
+        if(repo){
+            var parsed=parseUrl(repo);
+            if(parsed){
+                setRepoUrl(repo);
+                if(shouldAutoRun){
+                    setTimeout(function(){var btn=document.getElementById('analyze-btn');if(btn)btn.click();},500);
+                }
             }
         }
     },[]);
+
+    useEffect(function(){
+        var params=new URLSearchParams(window.location.search);
+        var exportFmt = params.get('export');
+        if(data && exportFmt && !window.__hasAutoExported) {
+            window.__hasAutoExported = true;
+            setTimeout(function() {
+                var fmt = exportFmt.toLowerCase();
+                if (fmt === 'json') exportJSON();
+                else if (fmt === 'md' || fmt === 'markdown') generateReport('md');
+                else if (fmt === 'txt' || fmt === 'text') generateReport('txt');
+                else if (fmt === 'svg') exportSVG();
+                else if (fmt === 'pdf') exportPDF();
+                else if (fmt === 'mermaid') downloadMermaid();
+                else if (fmt === 'diagram') downloadArchitectureSVG();
+            }, 1500); // Allow time for graph to render before export
+        }
+    }, [data]);
 
     function parseUrl(url){
         if(!url||typeof url!=='string')return null;
@@ -5497,27 +5517,18 @@ function App(){
         setShowGraphConfig(false);
     }
 
-    function openExcludeModal(continueToFolder){
+    function openExcludeModal(){
         setExcludePatternDraft(excludePatternInput);
-        setLaunchFolderAfterExcludeSave(!!continueToFolder);
         setShowExcludeModal(true);
     }
 
     function closeExcludeModal(){
         setShowExcludeModal(false);
-        setLaunchFolderAfterExcludeSave(false);
     }
 
     function saveExcludePatterns(){
-        var nextInput=excludePatternDraft;
-        var nextPatterns=compileExcludePatterns(nextInput);
-        var shouldLaunchFolder=launchFolderAfterExcludeSave;
-        setExcludePatternInput(nextInput);
+        setExcludePatternInput(excludePatternDraft);
         setShowExcludeModal(false);
-        setLaunchFolderAfterExcludeSave(false);
-        if(shouldLaunchFolder){
-            launchLocalFolderPicker(nextPatterns);
-        }
     }
 
     function closeConfirmDialog(result){
@@ -5777,7 +5788,7 @@ function App(){
     }
 
     function openLocalFolder(){
-        openExcludeModal(true);
+        launchLocalFolderPicker();
     }
 
     function openLocalZip(){
@@ -7649,7 +7660,7 @@ function App(){
                                 )
                             )
                         ),
-                        React.createElement('button',{className:'top-btn','aria-label':'Edit exclude patterns',onClick:function(){openExcludeModal(false);},disabled:loading,type:'button',style:customExcludeCount?{borderColor:'var(--acc)',color:'var(--acc)'}:null},
+                        React.createElement('button',{className:'top-btn','aria-label':'Edit exclude patterns',onClick:function(){openExcludeModal();},disabled:loading,type:'button',style:customExcludeCount?{borderColor:'var(--acc)',color:'var(--acc)'}:null},
                             React.createElement(Icon,{name:'ban',size:'m'}),
                             'Excludes',
                             customExcludeCount>0?' ('+customExcludeCount+')':''
@@ -7694,7 +7705,7 @@ function App(){
                         )
                     )
                 ),
-                React.createElement('button',{className:'top-btn','aria-label':'Edit exclude patterns',onClick:function(){openExcludeModal(false);},disabled:loading,style:customExcludeCount?{borderColor:'var(--acc)',color:'var(--acc)'}:null},
+                React.createElement('button',{className:'top-btn','aria-label':'Edit exclude patterns',onClick:function(){openExcludeModal();},disabled:loading,style:customExcludeCount?{borderColor:'var(--acc)',color:'var(--acc)'}:null},
                     React.createElement(Icon,{name:'ban',size:'m'}),
                     'Excludes',
                     customExcludeCount>0?' ('+customExcludeCount+')':''
@@ -8252,7 +8263,7 @@ function App(){
                 React.createElement('div',{className:'modal-footer'},
                     excludePatternDraft&&React.createElement('button',{className:'top-btn',onClick:function(){setExcludePatternDraft('');},style:{marginRight:'auto'}},'Clear Custom'),
                     React.createElement('button',{className:'top-btn',onClick:closeExcludeModal},'Cancel'),
-                    React.createElement('button',{className:'top-btn primary',onClick:saveExcludePatterns},launchFolderAfterExcludeSave?'Save & Continue':'Save')
+                    React.createElement('button',{className:'top-btn primary',onClick:saveExcludePatterns},'Save')
                 )
             )
         ),
