@@ -9975,16 +9975,37 @@ function App(){
     useEffect(function(){
         var params=new URLSearchParams(window.location.search);
         var repo=params.get('repo');
-        var shouldAutoRun=params.get('run')==='1';
-        if(repo&&repo.length<200&&!repo.includes('{')&&/^[a-zA-Z0-9_.\/-]+$/.test(repo)){
-            setRepoUrl(repo);
-            if(shouldAutoRun){
-                setTimeout(function(){var btn=document.getElementById('analyze-btn');if(btn)btn.click();},500);
+        var shouldAutoRun=params.get('run')==='1' || params.get('analyze')==='1';
+        if(repo){
+            var parsed=parseUrl(repo);
+            if(parsed){
+                setRepoUrl(repo);
+                if(shouldAutoRun){
+                    setTimeout(function(){var btn=document.getElementById('analyze-btn');if(btn)btn.click();},500);
+                }
             }
         }
         refreshRecentList();
         probeCodeflowCli();
     },[]);
+
+    useEffect(function(){
+        var params=new URLSearchParams(window.location.search);
+        var exportFmt = params.get('export');
+        if(data && exportFmt && !window.__hasAutoExported) {
+            window.__hasAutoExported = true;
+            setTimeout(function() {
+                var fmt = exportFmt.toLowerCase();
+                if (fmt === 'json') exportJSON();
+                else if (fmt === 'md' || fmt === 'markdown') generateReport('md');
+                else if (fmt === 'txt' || fmt === 'text') generateReport('txt');
+                else if (fmt === 'svg') exportSVG();
+                else if (fmt === 'pdf') exportPDF();
+                else if (fmt === 'mermaid') downloadMermaid();
+                else if (fmt === 'diagram') downloadArchitectureSVG();
+            }, 1500); // Allow time for graph to render before export
+        }
+    }, [data]);
 
     function parseUrl(url){
         if(!url||typeof url!=='string')return null;
