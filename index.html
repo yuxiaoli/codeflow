@@ -9698,6 +9698,7 @@ function App(){
     var _cliDirty=useState([]),cliDirty=_cliDirty[0],setCliDirty=_cliDirty[1];
     var _cliLive=useState(Object.create(null)),cliLiveByPath=_cliLive[0],setCliLiveByPath=_cliLive[1];
     var isMobile=viewportWidth<=980;
+    var autoExportFormatRef=useRef(new URLSearchParams(window.location.search).get('export'));
     var svgRef=useRef(null);
     var graph3dRef=useRef(null);
     var graph3dInstanceRef=useRef(null);
@@ -9990,12 +9991,22 @@ function App(){
     },[]);
 
     useEffect(function(){
-        var params=new URLSearchParams(window.location.search);
-        var exportFmt = params.get('export');
+        var exportFmt = autoExportFormatRef.current;
         if(data && exportFmt && !window.__hasAutoExported) {
-            window.__hasAutoExported = true;
-            setTimeout(function() {
-                var fmt = exportFmt.toLowerCase();
+            var fmt = exportFmt.toLowerCase();
+            if(fmt === 'diagram' && graphConfig.vizType !== 'architecture') {
+                setGraphConfig(function(config){return Object.assign({},config,{vizType:'architecture'});});
+                return;
+            }
+            var attempts = 0;
+            var timer = setTimeout(function exportWhenReady() {
+                var diagramSVG = architectureRenderRef.current && architectureRenderRef.current.querySelector('svg');
+                if(fmt === 'diagram' && !diagramSVG && attempts < 60) {
+                    attempts++;
+                    timer = setTimeout(exportWhenReady,250);
+                    return;
+                }
+                window.__hasAutoExported = true;
                 if (fmt === 'json') exportJSON();
                 else if (fmt === 'md' || fmt === 'markdown') generateReport('md');
                 else if (fmt === 'txt' || fmt === 'text') generateReport('txt');
@@ -10004,8 +10015,9 @@ function App(){
                 else if (fmt === 'mermaid') downloadMermaid();
                 else if (fmt === 'diagram') downloadArchitectureSVG();
             }, 1500); // Allow time for graph to render before export
+            return function(){clearTimeout(timer);};
         }
-    }, [data]);
+    }, [data,graphConfig.vizType]);
 
     function parseUrl(url){
         if(!url||typeof url!=='string')return null;
@@ -11249,31 +11261,36 @@ function App(){
         // Split into tokens while preserving structure
         var result=code.split('\n').map(function(line){
             var escaped=esc(line);
-            // Comments
-            if(isJS||isJava||isPHP||isCSS)escaped=escaped.replace(/(\/\/.*$)/gm,'<span class="syn-com">$1</span>');
-            if(isPy||isRuby)escaped=escaped.replace(/(#.*$)/gm,'<span class="syn-com">$1</span>');
-            if(isHTML)escaped=escaped.replace(/(&lt;!--[\s\S]*?--&gt;)/g,'<span class="syn-com">$1</span>');
-            // Strings - careful with order
-            escaped=escaped.replace(/(&quot;[^&]*&quot;|'[^']*'|`[^`]*`)/g,'<span class="syn-str">$1</span>');
-            // Numbers
-            escaped=escaped.replace(/\b(\d+\.?\d*)\b/g,'<span class="syn-num">$1</span>');
-            // Keywords
-            if(isJS)escaped=escaped.replace(/\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|class|extends|import|export|from|default|async|await|yield|typeof|instanceof|in|of|this|super|null|undefined|true|false|void|static|get|set)\b/g,'<span class="syn-kw">$1</span>');
-            if(isPy){
-                escaped=escaped.replace(/\b(async|await|def|class|return|if|elif|else|for|while|try|except|finally|raise|import|from|as|with|pass|break|continue|lambda|yield|global|nonlocal|assert|True|False|None|and|or|not|in|is|del|match|case|type)\b/g,'<span class="syn-kw">$1</span>');
-                escaped=escaped.replace(/(@\w+)/g,'<span class="syn-fn">$1</span>');
-                escaped=escaped.replace(/\b(self|cls)\b/g,'<span class="syn-kw" style="opacity:0.7">$1</span>');
+            function highlight(pattern,replacement){
+                return escaped.split(/(<span\b[^>]*>[\s\S]*?<\/span>)/g).map(function(part){
+                    return /^<span\b/.test(part)?part:part.replace(pattern,replacement);
+                }).join('');
             }
-            if(isJava)escaped=escaped.replace(/\b(public|private|protected|static|final|void|class|interface|extends|implements|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|import|package|this|super|null|true|false)\b/g,'<span class="syn-kw">$1</span>');
-            if(isRuby)escaped=escaped.replace(/\b(def|class|module|end|return|if|elsif|else|unless|case|when|for|while|until|do|begin|rescue|ensure|raise|require|include|extend|attr_accessor|attr_reader|attr_writer|true|false|nil|self)\b/g,'<span class="syn-kw">$1</span>');
-            if(isPHP)escaped=escaped.replace(/\b(function|class|return|if|else|elseif|for|foreach|while|do|switch|case|break|continue|try|catch|finally|throw|new|public|private|protected|static|const|use|namespace|extends|implements|true|false|null)\b/g,'<span class="syn-kw">$1</span>');
-            if(isVBA)escaped=escaped.replace(/\b(Public|Private|Friend|Static|Dim|Set|Let|Get|Call|Function|Sub|End Sub|End Function|Exit Sub|Exit Function|If|Then|Else|ElseIf|End If|For|To|Step|Next|Do|Loop|While|Wend|Select|Case|End Select|With|End With|On Error|Resume|GoTo|ByVal|ByRef|Optional|ParamArray|As|Type|Enum|Const|True|False|Nothing|Empty|Null|Me|Application|ThisWorkbook|Worksheets|Cells|Range|MsgBox|InputBox|Debug\.Print)\b/gi,'<span class="syn-kw">$1</span>');
-            if(isCSS)escaped=escaped.replace(/(@media|@import|@keyframes|@font-face|!important)/g,'<span class="syn-kw">$1</span>');
-            if(isHTML){escaped=escaped.replace(/(&lt;\/?)([\w-]+)/g,'$1<span class="syn-tag">$2</span>');escaped=escaped.replace(/([\w-]+)(=)/g,'<span class="syn-attr">$1</span>$2');}
+            // Comments
+            if(isJS||isJava||isPHP||isCSS)escaped=highlight(/(\/\/.*$)/gm,'<span class="syn-com">$1</span>');
+            if(isPy||isRuby)escaped=highlight(/(#.*$)/gm,'<span class="syn-com">$1</span>');
+            if(isHTML)escaped=highlight(/(&lt;!--[\s\S]*?--&gt;)/g,'<span class="syn-com">$1</span>');
+            // Strings - careful with order
+            escaped=highlight(/(&quot;[^&]*&quot;|'[^']*'|`[^`]*`)/g,'<span class="syn-str">$1</span>');
+            // Numbers
+            escaped=highlight(/\b(\d+\.?\d*)\b/g,'<span class="syn-num">$1</span>');
+            // Keywords
+            if(isJS)escaped=highlight(/\b(const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|class|extends|import|export|from|default|async|await|yield|typeof|instanceof|in|of|this|super|null|undefined|true|false|void|static|get|set)\b/g,'<span class="syn-kw">$1</span>');
+            if(isPy){
+                escaped=highlight(/\b(async|await|def|class|return|if|elif|else|for|while|try|except|finally|raise|import|from|as|with|pass|break|continue|lambda|yield|global|nonlocal|assert|True|False|None|and|or|not|in|is|del|match|case|type)\b/g,'<span class="syn-kw">$1</span>');
+                escaped=highlight(/(@\w+)/g,'<span class="syn-fn">$1</span>');
+                escaped=highlight(/\b(self|cls)\b/g,'<span class="syn-kw" style="opacity:0.7">$1</span>');
+            }
+            if(isJava)escaped=highlight(/\b(public|private|protected|static|final|void|class|interface|extends|implements|return|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|new|import|package|this|super|null|true|false)\b/g,'<span class="syn-kw">$1</span>');
+            if(isRuby)escaped=highlight(/\b(def|class|module|end|return|if|elsif|else|unless|case|when|for|while|until|do|begin|rescue|ensure|raise|require|include|extend|attr_accessor|attr_reader|attr_writer|true|false|nil|self)\b/g,'<span class="syn-kw">$1</span>');
+            if(isPHP)escaped=highlight(/\b(function|class|return|if|else|elseif|for|foreach|while|do|switch|case|break|continue|try|catch|finally|throw|new|public|private|protected|static|const|use|namespace|extends|implements|true|false|null)\b/g,'<span class="syn-kw">$1</span>');
+            if(isVBA)escaped=highlight(/\b(Public|Private|Friend|Static|Dim|Set|Let|Get|Call|Function|Sub|End Sub|End Function|Exit Sub|Exit Function|If|Then|Else|ElseIf|End If|For|To|Step|Next|Do|Loop|While|Wend|Select|Case|End Select|With|End With|On Error|Resume|GoTo|ByVal|ByRef|Optional|ParamArray|As|Type|Enum|Const|True|False|Nothing|Empty|Null|Me|Application|ThisWorkbook|Worksheets|Cells|Range|MsgBox|InputBox|Debug\.Print)\b/gi,'<span class="syn-kw">$1</span>');
+            if(isCSS)escaped=highlight(/(@media|@import|@keyframes|@font-face|!important)/g,'<span class="syn-kw">$1</span>');
+            if(isHTML){escaped=highlight(/(&lt;\/?)([\w-]+)/g,'$1<span class="syn-tag">$2</span>');escaped=highlight(/([\w-]+)(=)/g,'<span class="syn-attr">$1</span>$2');}
             // Function calls
-            escaped=escaped.replace(/\b([a-zA-Z_]\w*)\s*\(/g,'<span class="syn-fn">$1</span>(');
+            escaped=highlight(/\b([a-zA-Z_]\w*)(\s*)\(/g,'<span class="syn-fn">$1</span>$2(');
             // Types (capitalized words in certain contexts)
-            if(isJS||isJava)escaped=escaped.replace(/:\s*([A-Z]\w*)/g,': <span class="syn-type">$1</span>');
+            if(isJS||isJava)escaped=highlight(/:(\s*)([A-Z]\w*)/g,':$1<span class="syn-type">$2</span>');
             return escaped;
         });
         return result;
