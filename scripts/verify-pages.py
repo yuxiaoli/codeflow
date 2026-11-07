@@ -83,6 +83,7 @@ async def branding_layout(page, downloads, evidence):
             for _ in range(2):
                 await page.get_by_role("button", name="Open explorer panel", exact=True).click()
                 await page.get_by_role("button", name="Close explorer panel", exact=True).click()
+                await expect(page.locator(".sidebar")).not_to_be_in_viewport()
                 await verify_branding(page)
         await page.screenshot(path=ARTIFACTS / f"branding-{width}-dark.png", full_page=True)
         evidence["viewports"].append({"width": width, "height": height, "status": "passed"})
