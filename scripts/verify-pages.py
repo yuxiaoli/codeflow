@@ -49,6 +49,47 @@ async def save_download(download, name):
     return destination
 
 
+async def verify_branding(page):
+    credit = page.get_by_role("contentinfo", name="Fork credit")
+    await expect(credit).to_have_count(1)
+    await expect(credit).to_have_text("Adapted by Sean with ❤️")
+    await expect(credit).to_be_in_viewport(ratio=1)
+    link = credit.get_by_role("link", name="Sean", exact=True)
+    await expect(credit.get_by_role("link")).to_have_count(1)
+    await expect(link).to_have_attribute("href", "https://www.linkedin.com/in/yuxiaoli/")
+    await expect(link).to_have_attribute("rel", "noopener noreferrer")
+    await link.click(trial=True)
+    assert await page.locator("body").evaluate(
+        "element => element.scrollWidth <= window.innerWidth"
+    ), "Branding layout introduced horizontal page overflow"
+
+
+async def branding_layout(page, downloads, evidence):
+    await page.emulate_media(color_scheme="dark")
+    response = await page.goto(site_url(), wait_until="domcontentloaded")
+    assert response and response.status == 200
+    evidence["viewports"] = []
+    for width, height in [(1440, 1000), (768, 1024), (390, 844), (320, 568)]:
+        await page.set_viewport_size({"width": width, "height": height})
+        await verify_branding(page)
+        toggle = page.get_by_role("button", name="Toggle theme", exact=True).filter(visible=True)
+        await toggle.click()
+        await expect(page.locator("body")).to_have_class("light")
+        await verify_branding(page)
+        await page.screenshot(path=ARTIFACTS / f"branding-{width}-light.png", full_page=True)
+        await toggle.click()
+        await expect(page.locator("body")).not_to_have_class("light")
+        if width <= 980:
+            for _ in range(2):
+                await page.get_by_role("button", name="Open explorer panel", exact=True).click()
+                await page.get_by_role("button", name="Close explorer panel", exact=True).click()
+                await verify_branding(page)
+        await page.screenshot(path=ARTIFACTS / f"branding-{width}-dark.png", full_page=True)
+        evidence["viewports"].append({"width": width, "height": height, "status": "passed"})
+    evidence["credit"] = "Adapted by Sean with ❤️"
+    evidence["link"] = "https://www.linkedin.com/in/yuxiaoli/"
+
+
 async def wait_for_auto_download(page, downloads, evidence):
     deadline = asyncio.get_running_loop().time() + TIMEOUT_MS / 1000
     while asyncio.get_running_loop().time() < deadline:
@@ -82,6 +123,7 @@ async def network_analysis(page, downloads, evidence, name):
     assert any("/git/trees/" in item["url"] for item in api), "GitHub tree was not fetched"
     assert any("/contents/README" in item["url"] for item in api), "GitHub source was not fetched"
     assert all(item["status"] == 200 for item in api), f"GitHub API failures: {api}"
+    await verify_branding(page)
     evidence.update({"stats": analysis["stats"], "auto_export": str(artifact)})
     await page.screenshot(path=ARTIFACTS / f"{name}.png", full_page=True)
 
@@ -130,6 +172,7 @@ async def local_zip_analysis(page, downloads, evidence, archive):
     )
     assert sorted(file["path"] for file in analysis["files"]) == expected_paths
     assert len(analysis["connections"]) == 6
+    await verify_branding(page)
     await page.screenshot(path=ARTIFACTS / "fixture-graph.png", full_page=True)
     evidence.update({
         "stats": analysis["stats"], "auto_diagram": str(artifact),
@@ -186,6 +229,7 @@ async def main():
         browser = await playwright.chromium.launch(**options)
         try:
             cases = await asyncio.gather(
+                run_case(browser, "branding", {"width": 1440, "height": 1000}, branding_layout),
                 run_case(browser, "desktop", {"width": 1440, "height": 1000},
                          lambda page, downloads, evidence: network_analysis(page, downloads, evidence, "desktop")),
                 run_case(browser, "mobile", {"width": 390, "height": 844},

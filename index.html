@@ -64,6 +64,10 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg0);color:var(--t0
 .top-btn.primary:hover{background:var(--acc2)}
 .top-btn:disabled{opacity:0.5;cursor:not-allowed}
 .main{display:flex;flex:1;overflow:hidden;min-height:0;position:relative}
+.brand-credit{flex-shrink:0;min-height:32px;padding:7px 12px;background:var(--bg1);border-top:1px solid var(--border);color:var(--t2);font-size:10px;line-height:18px;text-align:center}
+.brand-credit a{color:var(--t1);text-decoration:none;text-underline-offset:3px}
+.brand-credit a:hover{color:var(--acc);text-decoration:underline}
+.brand-credit a:focus-visible{outline:2px solid var(--acc);outline-offset:3px;border-radius:2px}
 .sidebar{width:260px;min-width:180px;max-width:400px;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:relative;min-height:0}
 .resize-handle{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:10}
 .resize-handle:hover{background:var(--acc);opacity:0.3}
@@ -726,7 +730,8 @@ body{height:100dvh;min-height:100dvh}
 .mobile-bottom-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:150;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:var(--bg1);border-top:1px solid var(--border)}
 .mobile-bottom-nav .top-btn{min-height:42px;justify-content:center;border-radius:8px;padding:0 8px;font-size:10px}
 .mobile-bottom-nav .top-btn.active{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
-.main{padding-bottom:calc(59px + env(safe-area-inset-bottom))}
+.main{padding-bottom:0}
+.brand-credit{margin-bottom:calc(59px + env(safe-area-inset-bottom))}
 .mobile-panel-backdrop{display:none}
 .sidebar,.right-panel{position:fixed;top:0;bottom:0;width:100vw!important;min-width:0;max-width:none;border:0;box-shadow:none;z-index:180;transition:transform 0.24s ease;overflow:hidden}
 .sidebar{left:0;transform:translateX(-100%)}
@@ -9638,6 +9643,14 @@ function HealthRing(props){
 // React Application
 // ---------------------------------------------------------------------------
 
+function BrandCredit(){
+    return React.createElement('footer',{className:'brand-credit','aria-label':'Fork credit'},
+        'Adapted by ',
+        React.createElement('a',{href:'https://www.linkedin.com/in/yuxiaoli/',target:'_blank',rel:'noopener noreferrer'},'Sean'),
+        ' with ❤️'
+    );
+}
+
 function App(){
     var _a=useState(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'),theme=_a[0],setTheme=_a[1];
     var _b=useState(''),repoUrl=_b[0],setRepoUrl=_b[1];
@@ -15001,6 +15014,7 @@ function App(){
                 )
             )
         ),
+        React.createElement(BrandCredit),
         showExport&&React.createElement('div',{className:'modal-overlay',onClick:function(){setShowExport(false);}},
             React.createElement('div',{className:'modal',onClick:function(e){e.stopPropagation();},style:{maxWidth:480}},
                 React.createElement('div',{className:'modal-header'},React.createElement('div',{className:'modal-title'},iconLabel('export','Export','m')),React.createElement('button',{className:'modal-close',onClick:function(){setShowExport(false);}},'×')),
